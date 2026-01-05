@@ -12,9 +12,12 @@
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     .title { font-size: 20px; font-weight: 700; color: #1e293b; }
     .month-input { font-size: 14px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px 8px; color: #475569; }
-    .team-row { display: flex; align-items: center; gap: 12px; padding: 12px; background: #f8fafc; border-radius: 12px; margin-bottom: 16px; }
+    .team-row { display: flex; align-items: center; gap: 12px; padding: 12px; background: #f8fafc; border-radius: 12px; margin-bottom: 16px; flex-wrap: wrap; }
     .team-row span { font-size: 14px; color: #475569; }
     .team-input { width: 60px; text-align: center; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px 8px; font-weight: 500; }
+    .sync-btn { background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; margin-left: auto; }
+    .sync-btn:hover { background: #059669; }
+    .sync-btn:disabled { background: #94a3b8; cursor: not-allowed; }
     
     .balance-box { border-radius: 16px; padding: 20px; text-align: center; margin-bottom: 12px; }
     .balance-box.positive { background: #f0fdf4; border: 2px solid #bbf7d0; }
@@ -51,6 +54,7 @@
     .input-field.amount { width: 100px; flex: none; }
     .add-btn { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 4px; }
     .add-btn:hover { background: #2563eb; }
+    .add-btn:disabled { background: #94a3b8; cursor: not-allowed; }
     
     .expense-list { max-height: 256px; overflow-y: auto; }
     .expense-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #f8fafc; border-radius: 12px; margin-bottom: 8px; }
@@ -64,95 +68,171 @@
     
     .empty-state { text-align: center; color: #94a3b8; padding: 32px; }
     .footer { text-align: center; font-size: 12px; color: #94a3b8; }
+    .status { text-align: center; font-size: 12px; padding: 8px; border-radius: 8px; margin-bottom: 16px; }
+    .status.loading { background: #fef3c7; color: #92400e; }
+    .status.error { background: #fee2e2; color: #991b1b; }
+    .status.success { background: #d1fae5; color: #065f46; }
+    .setup-box { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .setup-box h3 { color: #92400e; margin-bottom: 8px; font-size: 14px; }
+    .setup-box input { width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 12px; }
+    .setup-box button { margin-top: 8px; background: #f59e0b; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; width: 100%; }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="card">
-      <div class="header">
-        <h1 class="title">TeamBudget</h1>
-        <input type="month" id="monthInput" class="month-input" value="2026-01">
-      </div>
+    <div id="setupBox" class="setup-box">
+      <h3>⚙️ 초기 설정 (최초 1회)</h3>
+      <p style="font-size:12px;color:#78716c;margin-bottom:8px;">Google Apps Script 웹앱 URL을 입력하세요</p>
+      <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/xxx/exec">
+      <button onclick="saveScriptUrl()">저장 후 시작</button>
+    </div>
+
+    <div id="mainApp" style="display:none;">
+      <div id="statusBar" class="status loading">🔄 데이터 불러오는 중...</div>
       
-      <div class="team-row">
-        <span>👥</span>
-        <span>팀원 수</span>
-        <input type="number" id="teamSize" class="team-input" value="7" min="1">
-        <span>× 5만원 = <strong id="totalBudgetText">350,000원</strong></span>
-      </div>
-      
-      <div id="balanceBox" class="balance-box positive">
-        <p id="balanceLabel" class="balance-label positive">✓ 잔액</p>
-        <p id="balanceAmount" class="balance-amount positive">350,000원</p>
-      </div>
-      
-      <div class="stats-row">
-        <div class="stat-box budget">
-          <div class="stat-icon">💰</div>
-          <p class="stat-label budget">총 예산</p>
-          <p id="budgetAmount" class="stat-amount budget">350,000원</p>
+      <div class="card">
+        <div class="header">
+          <h1 class="title">TeamBudget</h1>
+          <input type="month" id="monthInput" class="month-input" value="2026-01">
         </div>
-        <div class="stat-box spent">
-          <div class="stat-icon">📉</div>
-          <p class="stat-label spent">사용액</p>
-          <p id="spentAmount" class="stat-amount spent">0원</p>
+        
+        <div class="team-row">
+          <span>👥</span>
+          <span>팀원 수</span>
+          <input type="number" id="teamSize" class="team-input" value="7" min="1">
+          <span>× 5만원 = <strong id="totalBudgetText">350,000원</strong></span>
+          <button id="syncBtn" class="sync-btn" onclick="loadData()">🔄 새로고침</button>
+        </div>
+        
+        <div id="balanceBox" class="balance-box positive">
+          <p id="balanceLabel" class="balance-label positive">✓ 잔액</p>
+          <p id="balanceAmount" class="balance-amount positive">350,000원</p>
+        </div>
+        
+        <div class="stats-row">
+          <div class="stat-box budget">
+            <div class="stat-icon">💰</div>
+            <p class="stat-label budget">총 예산</p>
+            <p id="budgetAmount" class="stat-amount budget">350,000원</p>
+          </div>
+          <div class="stat-box spent">
+            <div class="stat-icon">📉</div>
+            <p class="stat-label spent">사용액</p>
+            <p id="spentAmount" class="stat-amount spent">0원</p>
+          </div>
+        </div>
+        
+        <div class="progress-bar">
+          <div id="progressFill" class="progress-fill safe" style="width: 0%"></div>
+        </div>
+        <p id="progressText" class="progress-text">0.0% 사용</p>
+      </div>
+      
+      <div class="card">
+        <h2 class="section-title">지출 입력</h2>
+        <div class="input-row">
+          <input type="text" id="inputName" class="input-field" placeholder="사용자">
+          <input type="number" id="inputAmount" class="input-field amount" placeholder="금액">
+        </div>
+        <div class="input-row">
+          <input type="text" id="inputDesc" class="input-field" placeholder="사용 내역 (선택)">
+          <button id="addBtn" class="add-btn" onclick="addExpense()">➕ 추가</button>
         </div>
       </div>
       
-      <div class="progress-bar">
-        <div id="progressFill" class="progress-fill safe" style="width: 0%"></div>
+      <div class="card">
+        <h2 class="section-title">지출 내역 <span id="expenseCount" style="font-weight:normal;color:#94a3b8">(0건)</span></h2>
+        <div id="expenseList" class="expense-list">
+          <p class="empty-state">아직 지출 내역이 없습니다</p>
+        </div>
       </div>
-      <p id="progressText" class="progress-text">0.0% 사용</p>
+      
+      <p class="footer">💡 팀원들과 같은 URL을 공유하면 데이터가 실시간 동기화됩니다</p>
     </div>
-    
-    <div class="card">
-      <h2 class="section-title">지출 입력</h2>
-      <div class="input-row">
-        <input type="text" id="inputName" class="input-field" placeholder="사용자">
-        <input type="number" id="inputAmount" class="input-field amount" placeholder="금액">
-      </div>
-      <div class="input-row">
-        <input type="text" id="inputDesc" class="input-field" placeholder="사용 내역 (선택)">
-        <button class="add-btn" onclick="addExpense()">➕ 추가</button>
-      </div>
-    </div>
-    
-    <div class="card">
-      <h2 class="section-title">지출 내역 <span id="expenseCount" style="font-weight:normal;color:#94a3b8">(0건)</span></h2>
-      <div id="expenseList" class="expense-list">
-        <p class="empty-state">아직 지출 내역이 없습니다</p>
-      </div>
-    </div>
-    
-    <p class="footer">💡 이 페이지를 북마크하면 같은 브라우저에서 데이터가 유지됩니다</p>
   </div>
 
   <script>
     const BUDGET_PER_PERSON = 50000;
+    let SCRIPT_URL = '';
     let teamSize = 7;
     let expenses = [];
+    let allData = [];
     let currentMonth = '2026-01';
 
-    function getStorageKey() {
-      return `teambudget-${currentMonth}`;
-    }
-
-    function loadData() {
-      const saved = localStorage.getItem(getStorageKey());
-      if (saved) {
-        const data = JSON.parse(saved);
-        teamSize = data.teamSize || 7;
-        expenses = data.expenses || [];
-        document.getElementById('teamSize').value = teamSize;
-      } else {
-        teamSize = 7;
-        expenses = [];
+    function init() {
+      const savedUrl = localStorage.getItem('teambudget-script-url');
+      if (savedUrl) {
+        SCRIPT_URL = savedUrl;
+        document.getElementById('setupBox').style.display = 'none';
+        document.getElementById('mainApp').style.display = 'block';
+        loadData();
       }
-      render();
     }
 
-    function saveData() {
-      localStorage.setItem(getStorageKey(), JSON.stringify({ teamSize, expenses }));
+    function saveScriptUrl() {
+      const url = document.getElementById('scriptUrl').value.trim();
+      if (!url.startsWith('https://script.google.com/')) {
+        alert('올바른 Google Apps Script URL을 입력해주세요.');
+        return;
+      }
+      SCRIPT_URL = url;
+      localStorage.setItem('teambudget-script-url', url);
+      document.getElementById('setupBox').style.display = 'none';
+      document.getElementById('mainApp').style.display = 'block';
+      loadData();
+    }
+
+    function showStatus(message, type) {
+      const bar = document.getElementById('statusBar');
+      bar.textContent = message;
+      bar.className = 'status ' + type;
+      if (type === 'success') {
+        setTimeout(() => { bar.style.display = 'none'; }, 2000);
+      } else {
+        bar.style.display = 'block';
+      }
+    }
+
+    async function loadData() {
+      showStatus('🔄 데이터 불러오는 중...', 'loading');
+      document.getElementById('syncBtn').disabled = true;
+      
+      try {
+        const res = await fetch(SCRIPT_URL);
+        const json = await res.json();
+        
+        if (json.success) {
+          allData = json.data;
+          filterByMonth();
+          showStatus('✅ 동기화 완료', 'success');
+        } else {
+          showStatus('❌ 오류: ' + json.message, 'error');
+        }
+      } catch (e) {
+        showStatus('❌ 연결 실패: ' + e.message, 'error');
+      }
+      
+      document.getElementById('syncBtn').disabled = false;
+    }
+
+    function filterByMonth() {
+      const monthData = allData.filter(row => row.month === currentMonth);
+      
+      if (monthData.length > 0 && monthData[0].teamSize) {
+        teamSize = parseInt(monthData[0].teamSize) || 7;
+        document.getElementById('teamSize').value = teamSize;
+      }
+      
+      expenses = monthData
+        .filter(row => row.name && row.amount)
+        .map((row, i) => ({
+          rowIndex: allData.indexOf(row) + 2,
+          name: row.name,
+          amount: parseInt(row.amount) || 0,
+          description: row.description || ''
+        }));
+      
+      render();
     }
 
     function formatCurrency(n) {
@@ -198,65 +278,109 @@
       if (expenses.length === 0) {
         listEl.innerHTML = '<p class="empty-state">아직 지출 내역이 없습니다</p>';
       } else {
-        listEl.innerHTML = expenses.map((e, i) => `
+        listEl.innerHTML = expenses.map((e) => `
           <div class="expense-item">
             <div class="expense-info">
               <span class="expense-name">${e.name}</span>
-              <span class="expense-date">${e.date}</span>
               ${e.description ? `<p class="expense-desc">${e.description}</p>` : ''}
             </div>
             <span class="expense-amount">${formatCurrency(e.amount)}</span>
-            <button class="delete-btn" onclick="deleteExpense(${i})">🗑️</button>
+            <button class="delete-btn" onclick="deleteExpense(${e.rowIndex})">🗑️</button>
           </div>
         `).join('');
       }
     }
 
-    function addExpense() {
+    async function addExpense() {
       const name = document.getElementById('inputName').value.trim();
       const amount = parseInt(document.getElementById('inputAmount').value);
       const description = document.getElementById('inputDesc').value.trim();
 
-      if (!name || !amount) return;
+      if (!name || !amount) {
+        alert('사용자와 금액을 입력해주세요.');
+        return;
+      }
 
-      expenses.push({
-        id: Date.now(),
-        name,
-        amount,
-        description,
-        date: new Date().toLocaleDateString('ko-KR')
-      });
+      document.getElementById('addBtn').disabled = true;
+      showStatus('💾 저장 중...', 'loading');
 
-      saveData();
-      render();
+      try {
+        await fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'add',
+            month: currentMonth,
+            teamSize: teamSize,
+            name: name,
+            amount: amount,
+            description: description
+          })
+        });
 
-      document.getElementById('inputName').value = '';
-      document.getElementById('inputAmount').value = '';
-      document.getElementById('inputDesc').value = '';
+        document.getElementById('inputName').value = '';
+        document.getElementById('inputAmount').value = '';
+        document.getElementById('inputDesc').value = '';
+        
+        setTimeout(() => loadData(), 1000);
+        
+      } catch (e) {
+        showStatus('❌ 저장 실패: ' + e.message, 'error');
+      }
+
+      document.getElementById('addBtn').disabled = false;
     }
 
-    function deleteExpense(index) {
-      expenses.splice(index, 1);
-      saveData();
-      render();
+    async function deleteExpense(rowIndex) {
+      if (!confirm('정말 삭제하시겠습니까?')) return;
+      
+      showStatus('🗑️ 삭제 중...', 'loading');
+
+      try {
+        await fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'delete',
+            rowIndex: rowIndex
+          })
+        });
+        
+        setTimeout(() => loadData(), 1000);
+        
+      } catch (e) {
+        showStatus('❌ 삭제 실패: ' + e.message, 'error');
+      }
     }
 
-    document.getElementById('teamSize').addEventListener('change', (e) => {
+    document.getElementById('teamSize').addEventListener('change', async (e) => {
       teamSize = Math.max(1, parseInt(e.target.value) || 1);
-      saveData();
       render();
+      
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateTeamSize',
+          month: currentMonth,
+          teamSize: teamSize
+        })
+      });
     });
 
     document.getElementById('monthInput').addEventListener('change', (e) => {
       currentMonth = e.target.value;
-      loadData();
+      filterByMonth();
     });
 
     document.getElementById('inputDesc').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') addExpense();
     });
 
-    loadData();
+    init();
   </script>
 </body>
 </html>
