@@ -1,9 +1,76 @@
-<!DOCTYPE html>
+// ========================================
+// Google Apps Script - 통합 버전
+// 스프레드시트 > 확장 프로그램 > Apps Script에 붙여넣기
+// ========================================
+
+const SHEET_NAME = 'Sheet1'; // 시트 이름 (필요시 수정)
+const BUDGET_PER_PERSON = 50000;
+
+function doGet(e) {
+  return HtmlService.createHtmlOutput(getHtmlContent())
+    .setTitle('TeamBudget - 팀 조직경비 관리')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function getData() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  
+  const headers = data[0];
+  return data.slice(1).map((row, index) => {
+    const obj = { rowIndex: index + 2 };
+    headers.forEach((h, i) => obj[h] = row[i]);
+    return obj;
+  });
+}
+
+function addExpense(month, teamSize, name, amount, description) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  sheet.appendRow([
+    month,
+    teamSize,
+    name,
+    amount,
+    description,
+    new Date().toLocaleDateString('ko-KR')
+  ]);
+  return { success: true };
+}
+
+function deleteExpense(rowIndex) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  if (rowIndex > 1) {
+    sheet.deleteRow(rowIndex);
+  }
+  return { success: true };
+}
+
+function updateTeamSize(month, teamSize) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  let found = false;
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === month) {
+      sheet.getRange(i + 1, 2).setValue(teamSize);
+      found = true;
+    }
+  }
+  
+  if (!found) {
+    sheet.appendRow([month, teamSize, '', '', '', '']);
+  }
+  return { success: true };
+}
+
+function getHtmlContent() {
+  return `<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TeamBudget - 팀 조직경비 관리</title>
+  <title>TeamBudget</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; min-height: 100vh; padding: 16px; }
@@ -52,7 +119,7 @@
     .input-row { display: flex; gap: 8px; margin-bottom: 8px; }
     .input-field { flex: 1; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; font-size: 14px; }
     .input-field.amount { width: 100px; flex: none; }
-    .add-btn { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 4px; }
+    .add-btn { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; }
     .add-btn:hover { background: #2563eb; }
     .add-btn:disabled { background: #94a3b8; cursor: not-allowed; }
     
@@ -60,7 +127,6 @@
     .expense-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #f8fafc; border-radius: 12px; margin-bottom: 8px; }
     .expense-info { flex: 1; }
     .expense-name { font-weight: 500; color: #334155; }
-    .expense-date { font-size: 12px; color: #94a3b8; margin-left: 8px; }
     .expense-desc { font-size: 12px; color: #64748b; margin-top: 2px; }
     .expense-amount { font-weight: 600; color: #334155; margin-right: 12px; }
     .delete-btn { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 18px; }
@@ -68,319 +134,226 @@
     
     .empty-state { text-align: center; color: #94a3b8; padding: 32px; }
     .footer { text-align: center; font-size: 12px; color: #94a3b8; }
-    .status { text-align: center; font-size: 12px; padding: 8px; border-radius: 8px; margin-bottom: 16px; }
-    .status.loading { background: #fef3c7; color: #92400e; }
-    .status.error { background: #fee2e2; color: #991b1b; }
-    .status.success { background: #d1fae5; color: #065f46; }
-    .setup-box { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-    .setup-box h3 { color: #92400e; margin-bottom: 8px; font-size: 14px; }
-    .setup-box input { width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 12px; }
-    .setup-box button { margin-top: 8px; background: #f59e0b; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; width: 100%; }
+    .status { text-align: center; font-size: 12px; padding: 8px; border-radius: 8px; margin-bottom: 16px; display: none; }
+    .status.loading { background: #fef3c7; color: #92400e; display: block; }
+    .status.error { background: #fee2e2; color: #991b1b; display: block; }
+    .status.success { background: #d1fae5; color: #065f46; display: block; }
   </style>
 </head>
 <body>
   <div class="container">
-    <div id="setupBox" class="setup-box">
-      <h3>⚙️ 초기 설정 (최초 1회)</h3>
-      <p style="font-size:12px;color:#78716c;margin-bottom:8px;">Google Apps Script 웹앱 URL을 입력하세요</p>
-      <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/xxx/exec">
-      <button onclick="saveScriptUrl()">저장 후 시작</button>
+    <div id="statusBar" class="status loading">🔄 데이터 불러오는 중...</div>
+    
+    <div class="card">
+      <div class="header">
+        <h1 class="title">TeamBudget</h1>
+        <input type="month" id="monthInput" class="month-input" value="2026-01">
+      </div>
+      
+      <div class="team-row">
+        <span>👥</span>
+        <span>팀원 수</span>
+        <input type="number" id="teamSize" class="team-input" value="7" min="1">
+        <span>× 5만원 = <strong id="totalBudgetText">350,000원</strong></span>
+        <button id="syncBtn" class="sync-btn" onclick="loadData()">🔄 새로고침</button>
+      </div>
+      
+      <div id="balanceBox" class="balance-box positive">
+        <p id="balanceLabel" class="balance-label positive">✓ 잔액</p>
+        <p id="balanceAmount" class="balance-amount positive">350,000원</p>
+      </div>
+      
+      <div class="stats-row">
+        <div class="stat-box budget">
+          <div class="stat-icon">💰</div>
+          <p class="stat-label budget">총 예산</p>
+          <p id="budgetAmount" class="stat-amount budget">350,000원</p>
+        </div>
+        <div class="stat-box spent">
+          <div class="stat-icon">📉</div>
+          <p class="stat-label spent">사용액</p>
+          <p id="spentAmount" class="stat-amount spent">0원</p>
+        </div>
+      </div>
+      
+      <div class="progress-bar">
+        <div id="progressFill" class="progress-fill safe" style="width: 0%"></div>
+      </div>
+      <p id="progressText" class="progress-text">0.0% 사용</p>
     </div>
-
-    <div id="mainApp" style="display:none;">
-      <div id="statusBar" class="status loading">🔄 데이터 불러오는 중...</div>
-      
-      <div class="card">
-        <div class="header">
-          <h1 class="title">TeamBudget</h1>
-          <input type="month" id="monthInput" class="month-input" value="2026-01">
-        </div>
-        
-        <div class="team-row">
-          <span>👥</span>
-          <span>팀원 수</span>
-          <input type="number" id="teamSize" class="team-input" value="7" min="1">
-          <span>× 5만원 = <strong id="totalBudgetText">350,000원</strong></span>
-          <button id="syncBtn" class="sync-btn" onclick="loadData()">🔄 새로고침</button>
-        </div>
-        
-        <div id="balanceBox" class="balance-box positive">
-          <p id="balanceLabel" class="balance-label positive">✓ 잔액</p>
-          <p id="balanceAmount" class="balance-amount positive">350,000원</p>
-        </div>
-        
-        <div class="stats-row">
-          <div class="stat-box budget">
-            <div class="stat-icon">💰</div>
-            <p class="stat-label budget">총 예산</p>
-            <p id="budgetAmount" class="stat-amount budget">350,000원</p>
-          </div>
-          <div class="stat-box spent">
-            <div class="stat-icon">📉</div>
-            <p class="stat-label spent">사용액</p>
-            <p id="spentAmount" class="stat-amount spent">0원</p>
-          </div>
-        </div>
-        
-        <div class="progress-bar">
-          <div id="progressFill" class="progress-fill safe" style="width: 0%"></div>
-        </div>
-        <p id="progressText" class="progress-text">0.0% 사용</p>
+    
+    <div class="card">
+      <h2 class="section-title">지출 입력</h2>
+      <div class="input-row">
+        <input type="text" id="inputName" class="input-field" placeholder="사용자">
+        <input type="number" id="inputAmount" class="input-field amount" placeholder="금액">
       </div>
-      
-      <div class="card">
-        <h2 class="section-title">지출 입력</h2>
-        <div class="input-row">
-          <input type="text" id="inputName" class="input-field" placeholder="사용자">
-          <input type="number" id="inputAmount" class="input-field amount" placeholder="금액">
-        </div>
-        <div class="input-row">
-          <input type="text" id="inputDesc" class="input-field" placeholder="사용 내역 (선택)">
-          <button id="addBtn" class="add-btn" onclick="addExpense()">➕ 추가</button>
-        </div>
+      <div class="input-row">
+        <input type="text" id="inputDesc" class="input-field" placeholder="사용 내역 (선택)">
+        <button id="addBtn" class="add-btn" onclick="addExpense()">➕ 추가</button>
       </div>
-      
-      <div class="card">
-        <h2 class="section-title">지출 내역 <span id="expenseCount" style="font-weight:normal;color:#94a3b8">(0건)</span></h2>
-        <div id="expenseList" class="expense-list">
-          <p class="empty-state">아직 지출 내역이 없습니다</p>
-        </div>
-      </div>
-      
-      <p class="footer">💡 팀원들과 같은 URL을 공유하면 데이터가 실시간 동기화됩니다</p>
     </div>
+    
+    <div class="card">
+      <h2 class="section-title">지출 내역 <span id="expenseCount" style="font-weight:normal;color:#94a3b8">(0건)</span></h2>
+      <div id="expenseList" class="expense-list">
+        <p class="empty-state">아직 지출 내역이 없습니다</p>
+      </div>
+    </div>
+    
+    <p class="footer">💡 이 URL을 팀원들과 공유하세요</p>
   </div>
 
   <script>
     const BUDGET_PER_PERSON = 50000;
-    let SCRIPT_URL = '';
     let teamSize = 7;
     let expenses = [];
     let allData = [];
     let currentMonth = '2026-01';
 
-    function init() {
-      const savedUrl = localStorage.getItem('teambudget-script-url');
-      if (savedUrl) {
-        SCRIPT_URL = savedUrl;
-        document.getElementById('setupBox').style.display = 'none';
-        document.getElementById('mainApp').style.display = 'block';
-        loadData();
-      }
-    }
-
-    function saveScriptUrl() {
-      const url = document.getElementById('scriptUrl').value.trim();
-      if (!url.startsWith('https://script.google.com/')) {
-        alert('올바른 Google Apps Script URL을 입력해주세요.');
-        return;
-      }
-      SCRIPT_URL = url;
-      localStorage.setItem('teambudget-script-url', url);
-      document.getElementById('setupBox').style.display = 'none';
-      document.getElementById('mainApp').style.display = 'block';
-      loadData();
-    }
-
-    function showStatus(message, type) {
+    function showStatus(msg, type) {
       const bar = document.getElementById('statusBar');
-      bar.textContent = message;
+      bar.textContent = msg;
       bar.className = 'status ' + type;
-      if (type === 'success') {
-        setTimeout(() => { bar.style.display = 'none'; }, 2000);
-      } else {
-        bar.style.display = 'block';
-      }
+      if (type === 'success') setTimeout(() => bar.style.display = 'none', 2000);
     }
 
-    async function loadData() {
+    function loadData() {
       showStatus('🔄 데이터 불러오는 중...', 'loading');
       document.getElementById('syncBtn').disabled = true;
       
-      try {
-        const res = await fetch(SCRIPT_URL);
-        const json = await res.json();
-        
-        if (json.success) {
-          allData = json.data;
+      google.script.run
+        .withSuccessHandler(data => {
+          allData = data;
           filterByMonth();
           showStatus('✅ 동기화 완료', 'success');
-        } else {
-          showStatus('❌ 오류: ' + json.message, 'error');
-        }
-      } catch (e) {
-        showStatus('❌ 연결 실패: ' + e.message, 'error');
-      }
-      
-      document.getElementById('syncBtn').disabled = false;
+          document.getElementById('syncBtn').disabled = false;
+        })
+        .withFailureHandler(err => {
+          showStatus('❌ 오류: ' + err.message, 'error');
+          document.getElementById('syncBtn').disabled = false;
+        })
+        .getData();
     }
 
     function filterByMonth() {
       const monthData = allData.filter(row => row.month === currentMonth);
-      
       if (monthData.length > 0 && monthData[0].teamSize) {
         teamSize = parseInt(monthData[0].teamSize) || 7;
         document.getElementById('teamSize').value = teamSize;
       }
-      
-      expenses = monthData
-        .filter(row => row.name && row.amount)
-        .map((row, i) => ({
-          rowIndex: allData.indexOf(row) + 2,
-          name: row.name,
-          amount: parseInt(row.amount) || 0,
-          description: row.description || ''
-        }));
-      
+      expenses = monthData.filter(row => row.name && row.amount).map(row => ({
+        rowIndex: row.rowIndex,
+        name: row.name,
+        amount: parseInt(row.amount) || 0,
+        description: row.description || ''
+      }));
       render();
     }
 
-    function formatCurrency(n) {
-      return n.toLocaleString('ko-KR') + '원';
-    }
+    function formatCurrency(n) { return n.toLocaleString('ko-KR') + '원'; }
 
     function render() {
       const totalBudget = teamSize * BUDGET_PER_PERSON;
       const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
       const remaining = totalBudget - totalSpent;
-      const usagePercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+      const pct = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
 
       document.getElementById('totalBudgetText').textContent = formatCurrency(totalBudget);
       document.getElementById('budgetAmount').textContent = formatCurrency(totalBudget);
       document.getElementById('spentAmount').textContent = formatCurrency(totalSpent);
 
-      const balanceBox = document.getElementById('balanceBox');
-      const balanceLabel = document.getElementById('balanceLabel');
-      const balanceAmount = document.getElementById('balanceAmount');
+      const box = document.getElementById('balanceBox');
+      const lbl = document.getElementById('balanceLabel');
+      const amt = document.getElementById('balanceAmount');
 
       if (remaining >= 0) {
-        balanceBox.className = 'balance-box positive';
-        balanceLabel.className = 'balance-label positive';
-        balanceLabel.textContent = '✓ 잔액';
-        balanceAmount.className = 'balance-amount positive';
-        balanceAmount.textContent = formatCurrency(remaining);
+        box.className = 'balance-box positive';
+        lbl.className = 'balance-label positive';
+        lbl.textContent = '✓ 잔액';
+        amt.className = 'balance-amount positive';
+        amt.textContent = formatCurrency(remaining);
       } else {
-        balanceBox.className = 'balance-box negative';
-        balanceLabel.className = 'balance-label negative';
-        balanceLabel.textContent = '⚠️ 예산 초과';
-        balanceAmount.className = 'balance-amount negative';
-        balanceAmount.textContent = formatCurrency(Math.abs(remaining)) + ' 초과';
+        box.className = 'balance-box negative';
+        lbl.className = 'balance-label negative';
+        lbl.textContent = '⚠️ 예산 초과';
+        amt.className = 'balance-amount negative';
+        amt.textContent = formatCurrency(Math.abs(remaining)) + ' 초과';
       }
 
-      const progressFill = document.getElementById('progressFill');
-      progressFill.style.width = Math.min(usagePercent, 100) + '%';
-      progressFill.className = 'progress-fill ' + (usagePercent > 100 ? 'danger' : usagePercent > 80 ? 'warning' : 'safe');
-      document.getElementById('progressText').textContent = usagePercent.toFixed(1) + '% 사용';
+      const fill = document.getElementById('progressFill');
+      fill.style.width = Math.min(pct, 100) + '%';
+      fill.className = 'progress-fill ' + (pct > 100 ? 'danger' : pct > 80 ? 'warning' : 'safe');
+      document.getElementById('progressText').textContent = pct.toFixed(1) + '% 사용';
+      document.getElementById('expenseCount').textContent = '(' + expenses.length + '건)';
 
-      document.getElementById('expenseCount').textContent = `(${expenses.length}건)`;
-
-      const listEl = document.getElementById('expenseList');
+      const list = document.getElementById('expenseList');
       if (expenses.length === 0) {
-        listEl.innerHTML = '<p class="empty-state">아직 지출 내역이 없습니다</p>';
+        list.innerHTML = '<p class="empty-state">아직 지출 내역이 없습니다</p>';
       } else {
-        listEl.innerHTML = expenses.map((e) => `
-          <div class="expense-item">
-            <div class="expense-info">
-              <span class="expense-name">${e.name}</span>
-              ${e.description ? `<p class="expense-desc">${e.description}</p>` : ''}
-            </div>
-            <span class="expense-amount">${formatCurrency(e.amount)}</span>
-            <button class="delete-btn" onclick="deleteExpense(${e.rowIndex})">🗑️</button>
-          </div>
-        `).join('');
+        list.innerHTML = expenses.map(e => 
+          '<div class="expense-item">' +
+            '<div class="expense-info">' +
+              '<span class="expense-name">' + e.name + '</span>' +
+              (e.description ? '<p class="expense-desc">' + e.description + '</p>' : '') +
+            '</div>' +
+            '<span class="expense-amount">' + formatCurrency(e.amount) + '</span>' +
+            '<button class="delete-btn" onclick="deleteExpense(' + e.rowIndex + ')">🗑️</button>' +
+          '</div>'
+        ).join('');
       }
     }
 
-    async function addExpense() {
+    function addExpense() {
       const name = document.getElementById('inputName').value.trim();
       const amount = parseInt(document.getElementById('inputAmount').value);
-      const description = document.getElementById('inputDesc').value.trim();
-
-      if (!name || !amount) {
-        alert('사용자와 금액을 입력해주세요.');
-        return;
-      }
+      const desc = document.getElementById('inputDesc').value.trim();
+      if (!name || !amount) { alert('사용자와 금액을 입력해주세요.'); return; }
 
       document.getElementById('addBtn').disabled = true;
       showStatus('💾 저장 중...', 'loading');
 
-      try {
-        await fetch(SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'add',
-            month: currentMonth,
-            teamSize: teamSize,
-            name: name,
-            amount: amount,
-            description: description
-          })
-        });
-
-        document.getElementById('inputName').value = '';
-        document.getElementById('inputAmount').value = '';
-        document.getElementById('inputDesc').value = '';
-        
-        setTimeout(() => loadData(), 1000);
-        
-      } catch (e) {
-        showStatus('❌ 저장 실패: ' + e.message, 'error');
-      }
-
-      document.getElementById('addBtn').disabled = false;
+      google.script.run
+        .withSuccessHandler(() => {
+          document.getElementById('inputName').value = '';
+          document.getElementById('inputAmount').value = '';
+          document.getElementById('inputDesc').value = '';
+          document.getElementById('addBtn').disabled = false;
+          loadData();
+        })
+        .withFailureHandler(err => {
+          showStatus('❌ 저장 실패: ' + err.message, 'error');
+          document.getElementById('addBtn').disabled = false;
+        })
+        .addExpense(currentMonth, teamSize, name, amount, desc);
     }
 
-    async function deleteExpense(rowIndex) {
+    function deleteExpense(rowIndex) {
       if (!confirm('정말 삭제하시겠습니까?')) return;
-      
       showStatus('🗑️ 삭제 중...', 'loading');
-
-      try {
-        await fetch(SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'delete',
-            rowIndex: rowIndex
-          })
-        });
-        
-        setTimeout(() => loadData(), 1000);
-        
-      } catch (e) {
-        showStatus('❌ 삭제 실패: ' + e.message, 'error');
-      }
+      google.script.run
+        .withSuccessHandler(() => loadData())
+        .withFailureHandler(err => showStatus('❌ 삭제 실패: ' + err.message, 'error'))
+        .deleteExpense(rowIndex);
     }
 
-    document.getElementById('teamSize').addEventListener('change', async (e) => {
+    document.getElementById('teamSize').addEventListener('change', e => {
       teamSize = Math.max(1, parseInt(e.target.value) || 1);
       render();
-      
-      await fetch(SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'updateTeamSize',
-          month: currentMonth,
-          teamSize: teamSize
-        })
-      });
+      google.script.run.updateTeamSize(currentMonth, teamSize);
     });
 
-    document.getElementById('monthInput').addEventListener('change', (e) => {
+    document.getElementById('monthInput').addEventListener('change', e => {
       currentMonth = e.target.value;
       filterByMonth();
     });
 
-    document.getElementById('inputDesc').addEventListener('keydown', (e) => {
+    document.getElementById('inputDesc').addEventListener('keydown', e => {
       if (e.key === 'Enter') addExpense();
     });
 
-    init();
+    loadData();
   </script>
 </body>
-</html>
+</html>`;
+}
