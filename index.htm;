@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TeamBudget - 팀 조직경비 관리</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; min-height: 100vh; padding: 16px; }
+    .container { max-width: 600px; margin: 0 auto; }
+    .card { background: white; border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #f1f5f9; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .title { font-size: 20px; font-weight: 700; color: #1e293b; }
+    .month-input { font-size: 14px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px 8px; color: #475569; }
+    .team-row { display: flex; align-items: center; gap: 12px; padding: 12px; background: #f8fafc; border-radius: 12px; margin-bottom: 16px; }
+    .team-row span { font-size: 14px; color: #475569; }
+    .team-input { width: 60px; text-align: center; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px 8px; font-weight: 500; }
+    
+    .balance-box { border-radius: 16px; padding: 20px; text-align: center; margin-bottom: 12px; }
+    .balance-box.positive { background: #f0fdf4; border: 2px solid #bbf7d0; }
+    .balance-box.negative { background: #fef2f2; border: 2px solid #fecaca; }
+    .balance-label { font-size: 14px; margin-bottom: 4px; }
+    .balance-label.positive { color: #16a34a; }
+    .balance-label.negative { color: #dc2626; }
+    .balance-amount { font-size: 28px; font-weight: 700; }
+    .balance-amount.positive { color: #15803d; }
+    .balance-amount.negative { color: #b91c1c; }
+    
+    .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .stat-box { border-radius: 12px; padding: 16px; text-align: center; }
+    .stat-box.budget { background: #eff6ff; }
+    .stat-box.spent { background: #fff7ed; }
+    .stat-icon { font-size: 20px; margin-bottom: 4px; }
+    .stat-label { font-size: 12px; margin-bottom: 4px; }
+    .stat-label.budget { color: #2563eb; }
+    .stat-label.spent { color: #ea580c; }
+    .stat-amount { font-weight: 700; }
+    .stat-amount.budget { color: #1d4ed8; }
+    .stat-amount.spent { color: #c2410c; }
+    
+    .progress-bar { height: 12px; background: #f1f5f9; border-radius: 999px; overflow: hidden; margin-top: 16px; }
+    .progress-fill { height: 100%; transition: width 0.3s; }
+    .progress-fill.safe { background: #3b82f6; }
+    .progress-fill.warning { background: #fb923c; }
+    .progress-fill.danger { background: #ef4444; }
+    .progress-text { font-size: 12px; color: #94a3b8; text-align: right; margin-top: 4px; }
+    
+    .section-title { font-weight: 600; color: #334155; margin-bottom: 12px; }
+    .input-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .input-field { flex: 1; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; font-size: 14px; }
+    .input-field.amount { width: 100px; flex: none; }
+    .add-btn { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 4px; }
+    .add-btn:hover { background: #2563eb; }
+    
+    .expense-list { max-height: 256px; overflow-y: auto; }
+    .expense-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #f8fafc; border-radius: 12px; margin-bottom: 8px; }
+    .expense-info { flex: 1; }
+    .expense-name { font-weight: 500; color: #334155; }
+    .expense-date { font-size: 12px; color: #94a3b8; margin-left: 8px; }
+    .expense-desc { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .expense-amount { font-weight: 600; color: #334155; margin-right: 12px; }
+    .delete-btn { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 18px; }
+    .delete-btn:hover { color: #ef4444; }
+    
+    .empty-state { text-align: center; color: #94a3b8; padding: 32px; }
+    .footer { text-align: center; font-size: 12px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <h1 class="title">TeamBudget</h1>
+        <input type="month" id="monthInput" class="month-input" value="2026-01">
+      </div>
+      
+      <div class="team-row">
+        <span>👥</span>
+        <span>팀원 수</span>
+        <input type="number" id="teamSize" class="team-input" value="7" min="1">
+        <span>× 5만원 = <strong id="totalBudgetText">350,000원</strong></span>
+      </div>
+      
+      <div id="balanceBox" class="balance-box positive">
+        <p id="balanceLabel" class="balance-label positive">✓ 잔액</p>
+        <p id="balanceAmount" class="balance-amount positive">350,000원</p>
+      </div>
+      
+      <div class="stats-row">
+        <div class="stat-box budget">
+          <div class="stat-icon">💰</div>
+          <p class="stat-label budget">총 예산</p>
+          <p id="budgetAmount" class="stat-amount budget">350,000원</p>
+        </div>
+        <div class="stat-box spent">
+          <div class="stat-icon">📉</div>
+          <p class="stat-label spent">사용액</p>
+          <p id="spentAmount" class="stat-amount spent">0원</p>
+        </div>
+      </div>
+      
+      <div class="progress-bar">
+        <div id="progressFill" class="progress-fill safe" style="width: 0%"></div>
+      </div>
+      <p id="progressText" class="progress-text">0.0% 사용</p>
+    </div>
+    
+    <div class="card">
+      <h2 class="section-title">지출 입력</h2>
+      <div class="input-row">
+        <input type="text" id="inputName" class="input-field" placeholder="사용자">
+        <input type="number" id="inputAmount" class="input-field amount" placeholder="금액">
+      </div>
+      <div class="input-row">
+        <input type="text" id="inputDesc" class="input-field" placeholder="사용 내역 (선택)">
+        <button class="add-btn" onclick="addExpense()">➕ 추가</button>
+      </div>
+    </div>
+    
+    <div class="card">
+      <h2 class="section-title">지출 내역 <span id="expenseCount" style="font-weight:normal;color:#94a3b8">(0건)</span></h2>
+      <div id="expenseList" class="expense-list">
+        <p class="empty-state">아직 지출 내역이 없습니다</p>
+      </div>
+    </div>
+    
+    <p class="footer">💡 이 페이지를 북마크하면 같은 브라우저에서 데이터가 유지됩니다</p>
+  </div>
+
+  <script>
+    const BUDGET_PER_PERSON = 50000;
+    let teamSize = 7;
+    let expenses = [];
+    let currentMonth = '2026-01';
+
+    function getStorageKey() {
+      return `teambudget-${currentMonth}`;
+    }
+
+    function loadData() {
+      const saved = localStorage.getItem(getStorageKey());
+      if (saved) {
+        const data = JSON.parse(saved);
+        teamSize = data.teamSize || 7;
+        expenses = data.expenses || [];
+        document.getElementById('teamSize').value = teamSize;
+      } else {
+        teamSize = 7;
+        expenses = [];
+      }
+      render();
+    }
+
+    function saveData() {
+      localStorage.setItem(getStorageKey(), JSON.stringify({ teamSize, expenses }));
+    }
+
+    function formatCurrency(n) {
+      return n.toLocaleString('ko-KR') + '원';
+    }
+
+    function render() {
+      const totalBudget = teamSize * BUDGET_PER_PERSON;
+      const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
+      const remaining = totalBudget - totalSpent;
+      const usagePercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+
+      document.getElementById('totalBudgetText').textContent = formatCurrency(totalBudget);
+      document.getElementById('budgetAmount').textContent = formatCurrency(totalBudget);
+      document.getElementById('spentAmount').textContent = formatCurrency(totalSpent);
+
+      const balanceBox = document.getElementById('balanceBox');
+      const balanceLabel = document.getElementById('balanceLabel');
+      const balanceAmount = document.getElementById('balanceAmount');
+
+      if (remaining >= 0) {
+        balanceBox.className = 'balance-box positive';
+        balanceLabel.className = 'balance-label positive';
+        balanceLabel.textContent = '✓ 잔액';
+        balanceAmount.className = 'balance-amount positive';
+        balanceAmount.textContent = formatCurrency(remaining);
+      } else {
+        balanceBox.className = 'balance-box negative';
+        balanceLabel.className = 'balance-label negative';
+        balanceLabel.textContent = '⚠️ 예산 초과';
+        balanceAmount.className = 'balance-amount negative';
+        balanceAmount.textContent = formatCurrency(Math.abs(remaining)) + ' 초과';
+      }
+
+      const progressFill = document.getElementById('progressFill');
+      progressFill.style.width = Math.min(usagePercent, 100) + '%';
+      progressFill.className = 'progress-fill ' + (usagePercent > 100 ? 'danger' : usagePercent > 80 ? 'warning' : 'safe');
+      document.getElementById('progressText').textContent = usagePercent.toFixed(1) + '% 사용';
+
+      document.getElementById('expenseCount').textContent = `(${expenses.length}건)`;
+
+      const listEl = document.getElementById('expenseList');
+      if (expenses.length === 0) {
+        listEl.innerHTML = '<p class="empty-state">아직 지출 내역이 없습니다</p>';
+      } else {
+        listEl.innerHTML = expenses.map((e, i) => `
+          <div class="expense-item">
+            <div class="expense-info">
+              <span class="expense-name">${e.name}</span>
+              <span class="expense-date">${e.date}</span>
+              ${e.description ? `<p class="expense-desc">${e.description}</p>` : ''}
+            </div>
+            <span class="expense-amount">${formatCurrency(e.amount)}</span>
+            <button class="delete-btn" onclick="deleteExpense(${i})">🗑️</button>
+          </div>
+        `).join('');
+      }
+    }
+
+    function addExpense() {
+      const name = document.getElementById('inputName').value.trim();
+      const amount = parseInt(document.getElementById('inputAmount').value);
+      const description = document.getElementById('inputDesc').value.trim();
+
+      if (!name || !amount) return;
+
+      expenses.push({
+        id: Date.now(),
+        name,
+        amount,
+        description,
+        date: new Date().toLocaleDateString('ko-KR')
+      });
+
+      saveData();
+      render();
+
+      document.getElementById('inputName').value = '';
+      document.getElementById('inputAmount').value = '';
+      document.getElementById('inputDesc').value = '';
+    }
+
+    function deleteExpense(index) {
+      expenses.splice(index, 1);
+      saveData();
+      render();
+    }
+
+    document.getElementById('teamSize').addEventListener('change', (e) => {
+      teamSize = Math.max(1, parseInt(e.target.value) || 1);
+      saveData();
+      render();
+    });
+
+    document.getElementById('monthInput').addEventListener('change', (e) => {
+      currentMonth = e.target.value;
+      loadData();
+    });
+
+    document.getElementById('inputDesc').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') addExpense();
+    });
+
+    loadData();
+  </script>
+</body>
+</html>
